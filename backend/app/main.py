@@ -4,7 +4,9 @@ from fastapi.openapi.utils import get_openapi
 from app.db.session import create_db_and_tables
 from app.auth.router import router as auth_router
 from app.shops.router import router as shops_router
-from app.models import shop, category, user
+from app.likes.router import router as likes_router 
+from app.categories.router import router as categories_router 
+from app.models import shop, category, user, like
 
 app = FastAPI()
 
@@ -40,6 +42,8 @@ app.openapi = custom_openapi
 # Include routers
 app.include_router(auth_router)
 app.include_router(shops_router)
+app.include_router(likes_router)
+app.include_router(categories_router)
 
 @app.on_event("startup")
 def on_startup():
