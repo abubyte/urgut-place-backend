@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 from datetime import datetime, timedelta
-
 import re
 import random
 import string
 
 from app.db.session import get_session
 from app.models.verification import VerificationCode
-from app.schemas.user import UserAuthRequest
+from app.schemas.user import UserAuthRequest, UserVerifyRequest
+from app.auth.service import verify_code_and_get_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -57,3 +57,26 @@ async def request_code(auth_data: UserAuthRequest, session: Session = Depends(ge
     print(f"Sending code {code} to {login} via {'SMS' if is_phone_number(login) else 'Email'}")
 
     return {"message": "Verification code sent"}
+
+
+@router.post("/verify-code")
+async def verify_code(verify_data: UserVerifyRequest, session: Session = Depends(get_session)):
+    """Verify the code and return a JWT token."""
+    user = verify_code_and_get_user(verify_data.login, verify_data.code, session)
+    
+    # Generate JWT token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.login, "role": user.role.value},
+        expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "login": user.login,
+            "role": user.role.value
+        }
+    }

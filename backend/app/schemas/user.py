@@ -1,11 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel
 from enum import Enum
-
-
-class UserRole(str, Enum):
-    admin = "admin"
-    client = "client"
+from app.models.user import UserRole
 
 
 class UserCreate(BaseModel):
@@ -14,7 +10,7 @@ class UserCreate(BaseModel):
     login: str
     phone: Optional[str]
     email: Optional[str]
-    image_url: Optional[str]
+    image_url: Optional[str] = None
     role: Optional[UserRole] = UserRole.client
 
 
