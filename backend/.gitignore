@@ -1,0 +1,50 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+
+# VSCode settings
+.vscode/
+
+# Environment variables
+.env
+.env.*
+
+# SQLite DB files
+*.sqlite3
+*.db
+
+# Alembic
+alembic/versions/
+
+# Logs
+*.log
+
+# Pytest
+.cache/
+.coverage
+pytest_cache/
+
+# Mypy
+.mypy_cache/
+
+# Mac/Windows system files
+.DS_Store
+Thumbs.db
+
+# Docker
+*.pid
+*.sock
+
+# Python egg
+*.egg-info/
+dist/
+build/
+
+# Others
+*.bak
+.idea/
