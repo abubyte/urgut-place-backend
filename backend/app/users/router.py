@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
-from typing import List, Optional
+from sqlalchemy import func
 from datetime import datetime, timedelta
 import random
 import string
@@ -9,7 +9,7 @@ from app.db.session import get_session
 from app.models.user import User, UserRole
 from app.schemas.user import (
     UserCreate, UserRead, UserUpdate, UserResponse,
-    UserListResponse, UserAuthRequest, UserVerifyRequest
+    UserListResponse, UserVerifyRequest
 )
 from app.auth.dependencies import get_current_user, get_admin_user
 from app.core.security import create_access_token, get_password_hash
@@ -76,7 +76,7 @@ async def verify_user(
 ):
     """Verify user's phone/email."""
     user = session.exec(
-        select(User).where(User.phone == verify_data.phone)
+        select(User).where(User.login == verify_data.login)
     ).first()
     
     if not user:
@@ -169,7 +169,7 @@ async def list_users(
     limit: int = Query(10, ge=1, le=100)
 ):
     """List all users (admin only)."""
-    total = session.exec(select(User)).count()
+    total = session.exec(select(func.count()).select_from(User)).one()
     users = session.exec(
         select(User)
         .offset(skip)
@@ -179,7 +179,7 @@ async def list_users(
     return UserListResponse(
         total=total,
         users=users,
-        page=skip // limit + 1,
+        page=(skip // limit) + 1,
         size=limit
     )
 
@@ -210,7 +210,7 @@ async def get_user(
         )
     return user
 
-@router.put("/{user_id}", response_model=UserResponse)
+@router.put("/{user_id}", response_model=UserResponse) # TODO: consider security to change role
 async def update_user(
     user_id: int,
     user_data: UserUpdate,
@@ -253,15 +253,21 @@ async def update_user(
 @router.delete("/{user_id}", response_model=dict)
 async def delete_user(
     user_id: int,
-    current_user: User = Depends(get_admin_user),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
-    """Delete a user (admin only)."""
+    """Delete a user (self or admin)."""
     user = session.exec(select(User).where(User.id == user_id)).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
+        )
+        
+    if current_user.id != user_id and current_user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete this user"
         )
     
     session.delete(user)

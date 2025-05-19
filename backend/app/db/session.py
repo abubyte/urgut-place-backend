@@ -1,4 +1,5 @@
 from sqlmodel import SQLModel, create_engine, Session
+from sqlalchemy.exc import OperationalError
 
 DATABASE_URL = "sqlite:///./db.sqlite3"
 

@@ -16,16 +16,16 @@ class User(SQLModel, table=True):
     firstname: str
     lastname: str
     login: str = Field(index=True, unique=True)  # phone or email
-    phone: Optional[str] = Field(default=None, index=True)
-    email: Optional[str] = Field(default=None, index=True)
+    phone: Optional[str] = Field(default=None, index=True, nullable=True)
+    email: Optional[str] = Field(default=None, index=True, nullable=True)
     hashed_password: str
-    image_url: Optional[str] = None
+    image_url: Optional[str] = Field(default=None, nullable=True)
     role: UserRole = Field(default=UserRole.client)
     is_verified: bool = Field(default=False)
     is_active: bool = Field(default=True)
-    verification_code: Optional[str] = None
-    verification_code_expires: Optional[datetime] = None
-    last_login: Optional[datetime] = None
+    verification_code: Optional[str] = Field(default=None, nullable=True)
+    verification_code_expires: Optional[datetime] = Field(default=None, nullable=True)
+    last_login: Optional[datetime] = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
