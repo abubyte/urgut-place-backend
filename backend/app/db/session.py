@@ -1,4 +1,5 @@
 from sqlmodel import SQLModel, create_engine, Session
+from sqlalchemy.exc import OperationalError
 
 DATABASE_URL = "sqlite:///./db.sqlite3"
 
@@ -10,4 +11,8 @@ def get_session():
 
 
 def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
+    try:
+        SQLModel.metadata.create_all(engine)
+        print("Database and tables created.")
+    except OperationalError as e:
+        print(f"Error creating database and tables: {e}")
