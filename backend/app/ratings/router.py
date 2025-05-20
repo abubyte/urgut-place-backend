@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
+from sqlalchemy import func
 from app.db.session import get_session
 from app.models.rating import Rating
 from app.schemas.rating import RatingCreate, RatingRead, RatingUpdate
 from app.auth.dependencies import get_current_user
 from app.models.user import User
+from app.models.shop import Shop
 from datetime import datetime
 
 router = APIRouter(prefix="/ratings", tags=["ratings"])
@@ -33,6 +35,17 @@ def create_rating(
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
+    
+    # Update the shop's average rating
+    shop = session.get(Shop, rating.shop_id)
+    if shop:
+        shop.rating = session.exec(
+            select(func.avg(Rating.rating)).where(Rating.shop_id == shop.id)
+        ).first() or 0
+        shop.rating_count += 1
+        session.add(shop)
+            
+    
     session.add(db_rating)
     session.commit()
     session.refresh(db_rating)
@@ -83,6 +96,14 @@ def update_rating(
     rating_data = rating_update.dict(exclude_unset=True)
     for key, value in rating_data.items():
         setattr(rating, key, value)
+    
+    shop = session.get(Shop, rating.shop_id)
+    if shop:
+        shop.rating = session.exec(
+            select(func.avg(Rating.rating)).where(Rating.shop_id == shop.id)
+        ).first() or 0
+        session.add(shop)
+        
     rating.updated_at = datetime.utcnow()
     session.add(rating)
     session.commit()
@@ -106,7 +127,17 @@ def delete_rating(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only delete your own ratings"
         )
-
-    session.delete(rating)
-    session.commit()
-    return None
+    
+    shop = session.get(Shop, rating.shop_id)
+    if shop:
+        session.delete(rating)
+        session.commit()  # Commit the deletion first
+        
+        # Now calculate new average with the rating removed
+        shop.rating = session.exec(
+            select(func.avg(Rating.rating)).where(Rating.shop_id == shop.id)
+        ).first() or 0
+        shop.rating_count -= 1
+        session.add(shop)
+        session.commit()
+        return None

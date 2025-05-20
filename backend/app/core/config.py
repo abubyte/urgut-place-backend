@@ -20,16 +20,16 @@ class Settings(BaseSettings):
     
     # Email
     SMTP_TLS: bool = True
-    SMTP_PORT: Optional[int] = None
-    SMTP_HOST: Optional[str] = None
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
+    SMTP_PORT: str
+    SMTP_HOST: str
+    SMTP_USER: str
+    SMTP_PASSWORD: str
     EMAILS_FROM_EMAIL: Optional[str] = None
     EMAILS_FROM_NAME: Optional[str] = None
     
     # SMS
-    SMS_PROVIDER: Optional[str] = None
-    SMS_API_KEY: Optional[str] = None
+    ESKIZ_EMAIL: str
+    ESKIZ_PASSWORD: str
     
     class Config:
         case_sensitive = True
