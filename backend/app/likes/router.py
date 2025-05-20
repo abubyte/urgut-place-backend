@@ -4,6 +4,7 @@ from typing import List
 
 from app.db.session import get_session
 from app.models.like import Like
+from app.models.shop import Shop
 from app.schemas.like import LikeCreate, LikeRead
 from app.auth.dependencies import get_current_user
 from app.models.user import User, UserRole
@@ -28,6 +29,13 @@ async def create_like(
 
     like = Like(user_id=current_user.id, shop_id=like_data.shop_id)
     session.add(like)
+    
+    shop = session.exec(select(Shop).where(Shop.id == like_data.shop_id)).first()
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    shop.like_count += 1
+   
+    session.add(shop)
     session.commit()
     session.refresh(like)
     return like
@@ -57,5 +65,11 @@ async def delete_like(
     if like.user_id != current_user.id and current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Not authorized to delete this like")
     session.delete(like)
+    
+    shop = session.exec(select(Shop).where(Shop.id == like.shop_id)).first()
+    if shop:
+        shop.like_count -= 1
+        session.add(shop)
+        
     session.commit()
     return {"message": "Like deleted"}

@@ -7,16 +7,13 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
+    # DB URL
+    DATABASE_URL: str
+    
     # Security
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    SECRET_KEY: str = secrets.token_urlsafe(32)  # Fallback to random key if not in .env
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    
-    # Database
-    DATABASE_URL: str = "sqlite:///./db.sqlite3"
-    
-    # CORS
-    BACKEND_CORS_ORIGINS: list[str] = ["*"]
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60

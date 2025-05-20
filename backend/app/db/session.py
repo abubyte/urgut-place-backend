@@ -1,9 +1,9 @@
 from sqlmodel import SQLModel, create_engine, Session
 from sqlalchemy.exc import OperationalError
+import os
+from app.core.config import settings
 
-DATABASE_URL = "sqlite:///./db.sqlite3"
-
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(settings.DATABASE_URL, echo=True)
 
 def get_session():
     with Session(engine) as session:
