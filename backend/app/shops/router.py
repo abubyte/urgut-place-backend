@@ -8,6 +8,7 @@ from app.models.shop import Shop
 from app.schemas.shop import ShopCreate, ShopRead, ShopUpdate
 from app.auth.dependencies import get_admin_user, get_current_user
 from app.models.user import User
+from app.models.category import Category
 
 router = APIRouter(prefix="/shops", tags=["shops"])
 
@@ -18,6 +19,10 @@ async def create_shop(
     session: Session = Depends(get_session)
 ):
     """Create a new shop (admin only)."""
+    
+    category = session.exec(select(Category).where(Category.id == shop_data.category_id)).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
     shop = Shop(**shop_data.model_dump())
     session.add(shop)
     session.commit()
@@ -67,6 +72,9 @@ async def update_shop(
     update_data = shop_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(shop, key, value)
+    
+    shop.updated_at = datetime.utcnow()
+    
     session.add(shop)
     session.commit()
     session.refresh(shop)

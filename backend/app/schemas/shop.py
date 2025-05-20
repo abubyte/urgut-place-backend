@@ -24,11 +24,13 @@ class ShopRead(BaseModel):
     seller_phone: str
     rating: float
     rating_count: int
+    like_count: int
     location_lat: float
     location_long: float
     location_str: str
     is_featured: bool
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

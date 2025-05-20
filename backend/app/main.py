@@ -8,8 +8,8 @@ import logging
 from app.db.session import create_db_and_tables
 from app.users.router import router as users_router
 from app.shops.router import router as shops_router
-from app.likes.router import router as likes_router 
 from app.categories.router import router as categories_router 
+from app.likes.router import router as likes_router 
 from app.ratings.router import router as ratings_router
 from app.models import shop, category, user, like, rating
 
@@ -44,7 +44,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     logger.warning(f"Validation error: {exc.errors()}")
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()}
+        content={"detail": exc.errors()[0].get("msg", "Validation Error")}
     )
 
 # Add JWT bearer authentication to Swagger UI
@@ -79,8 +79,8 @@ app.openapi = custom_openapi
 # Include routers
 app.include_router(users_router)
 app.include_router(shops_router)
-app.include_router(likes_router)
 app.include_router(categories_router)
+app.include_router(likes_router)
 app.include_router(ratings_router)
 
 @app.get("/")

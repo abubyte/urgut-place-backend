@@ -14,8 +14,10 @@ class Shop(SQLModel, table=True):
     seller_phone: str = Field(index=True)  # Phone number of the seller
     rating: float = Field(default=0.0)
     rating_count: int = Field(default=0)
+    like_count: int = Field(default=0)
     location_lat: float
     location_long: float
     location_str: str
     is_featured: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
