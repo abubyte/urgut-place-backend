@@ -5,6 +5,8 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 import random
 import string
+from app.auth.email_client import EmailClient
+from app.auth.eskiz_client import EskizClient
 from app.db.session import get_session
 from app.models.user import User, UserRole
 from app.schemas.user import (
@@ -16,6 +18,7 @@ from app.core.security import create_access_token, get_password_hash
 from app.core.config import settings
 from app.core.rate_limit import rate_limit
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
@@ -56,6 +59,14 @@ async def register_user(
 
         # TODO: Send verification code via SMS/Email
         logger.info(f"Verification code for user {user.id}: {verification_code}")
+        if re.match(r"^\+998\d{9}$", user_data.login):
+            EskizClient().send_sms(phone=user_data.login.removeprefix("+"), message='Bu Eskiz dan test') # TODO: message content
+        
+        elif re.match(r"^[^@]+@[^@]+\.[^@]+$", user_data.login):
+            subject = "Tasdiqlash kodi"
+            body = f"UrgutPlease uchun tasdiqlash kodi: {verification_code}"
+            EmailClient().send_email(user_data.login, subject, body)
+
 
         return UserResponse(
             message="User registered successfully. Please verify your account.",
@@ -65,7 +76,7 @@ async def register_user(
         logger.error(f"Error registering user: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error registering user"
+            detail=f"Error registering user: {str(e)}"
         )
 
 @router.post("/verify", response_model=UserResponse)
