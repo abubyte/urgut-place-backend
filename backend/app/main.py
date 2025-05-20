@@ -83,6 +83,7 @@ app.include_router(categories_router)
 app.include_router(likes_router)
 app.include_router(ratings_router)
 
-@app.get("/")
-def read_root():
-    return RedirectResponse("/docs")
+@app.get("/", include_in_schema=False)
+@app.head("/", include_in_schema=False)
+def root():
+    return {"message": "Service is up"}
