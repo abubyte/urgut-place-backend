@@ -45,4 +45,3 @@ class ShopUpdate(BaseModel):
     location_lat: Optional[float] = None
     location_long: Optional[float] = None
     location_str: Optional[str] = None
-    is_featured: Optional[bool] = None

@@ -63,7 +63,6 @@ class UserUpdate(BaseModel):
     phone: Optional[Annotated[str, StringConstraints(pattern=PHONE_REGEX)]] = None
     email: Optional[EmailStr] = None
     password: Optional[Annotated[str, StringConstraints(min_length=8)]] = None
-    role: Optional[UserRole] = None
 
     @validator('password')
     def validate_password(cls, v):
@@ -75,6 +74,9 @@ class UserUpdate(BaseModel):
             if not re.search(r'\d', v):
                 raise ValueError('Password must contain at least one number')
         return v
+
+class UserRoleUpdate(BaseModel):
+    role: UserRole
 
 class UserResponse(BaseModel):
     message: str

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Tuple
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from app.core.config import settings
@@ -18,13 +18,30 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(
         to_encode,
         settings.SECRET_KEY,
         algorithm=settings.ALGORITHM
     )
     return encoded_jwt
+
+def create_refresh_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
+    )
+    return encoded_jwt
+
+def create_tokens(data: dict) -> Tuple[str, str]:
+    """Create both access and refresh tokens."""
+    access_token = create_access_token(data)
+    refresh_token = create_refresh_token(data)
+    return access_token, refresh_token
 
 def verify_token(token: str) -> Optional[str]:
     try:
@@ -34,7 +51,8 @@ def verify_token(token: str) -> Optional[str]:
             algorithms=[settings.ALGORITHM]
         )
         username: str = payload.get("sub")
-        if username is None:
+        token_type: str = payload.get("type")
+        if username is None or token_type not in ["access", "refresh"]:
             return None
         return username
     except JWTError:
