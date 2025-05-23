@@ -34,6 +34,7 @@ async def list_shops(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     category_id: Optional[int] = Query(None, description="Filter by category ID"),
+    featured: Optional[bool] = Query(None, description="Filter by featured status"),
     skip: int = Query(0, ge=0, description="Number of shops to skip (pagination)"),
     limit: int = Query(10, ge=1, le=100, description="Maximum number of shops to return"),
 ):
@@ -41,6 +42,8 @@ async def list_shops(
     query = select(Shop)
     if category_id is not None:
         query = query.where(Shop.category_id == category_id)
+    if featured is not None:
+        query = query.where(Shop.is_featured == featured)
     query = query.order_by(Shop.rating.desc()).offset(skip).limit(limit)
     shops = session.exec(query).all()
     return shops
@@ -93,3 +96,23 @@ async def delete_shop(
     session.delete(shop)
     session.commit()
     return {"message": "Shop deleted"}
+
+@router.patch("/{shop_id}/feature", response_model=ShopRead)
+async def toggle_shop_featured(
+    shop_id: int,
+    is_featured: bool,
+    current_user: User = Depends(get_admin_user),
+    session: Session = Depends(get_session)
+):
+    """Toggle a shop's featured status (admin only)."""
+    shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    
+    shop.is_featured = is_featured
+    shop.updated_at = datetime.utcnow()
+    
+    session.add(shop)
+    session.commit()
+    session.refresh(shop)
+    return shop
