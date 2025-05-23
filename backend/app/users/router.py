@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 from sqlalchemy import func
@@ -17,19 +17,23 @@ from app.auth.dependencies import get_current_user, get_admin_user
 from app.core.security import create_access_token, get_password_hash
 from app.core.config import settings
 from app.core.rate_limit import rate_limit
+from app.core.image_service import ImageService
 import logging
 import re
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
+image_service = ImageService()
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @rate_limit(times=5, minutes=60)
 async def register_user(
-    user_data: UserCreate,
+    user_data: UserCreate = Depends(UserCreate.as_form),
+    image: Optional[UploadFile] = File(None),
     session: Session = Depends(get_session)
 ):
-    """Register a new user."""
+    """Register a new user with optional profile image."""
     try:
         # Check if user with same login exists
         existing_user = session.exec(
@@ -46,27 +50,34 @@ async def register_user(
         verification_expires = datetime.utcnow() + timedelta(minutes=15)
 
         # Create new user
-        user = User(
-            **user_data.model_dump(exclude={'password'}),
-            hashed_password=get_password_hash(user_data.password),
-            verification_code=verification_code,
-            verification_code_expires=verification_expires
-        )
+        user_dict = user_data.model_dump()
+        user_dict.update({
+            "hashed_password": get_password_hash(user_dict.pop("password")),
+            "verification_code": verification_code,
+            "verification_code_expires": verification_expires
+        })
         
+        user = User(**user_dict)
         session.add(user)
         session.commit()
         session.refresh(user)
 
-        # TODO: Send verification code via SMS/Email
+        # Handle profile image if provided
+        if image:
+            image_path = await image_service.save_image(image, "users")
+            user.image_url = image_path
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+
+        # Send verification code
         logger.info(f"Verification code for user {user.id}: {verification_code}")
         if re.match(r"^\+998\d{9}$", user_data.login):
-            EskizClient().send_sms(phone=user_data.login.removeprefix("+"), message='Bu Eskiz dan test') # TODO: message content
-        
+            EskizClient().send_sms(phone=user_data.login.removeprefix("+"), message='Bu Eskiz dan test')
         elif re.match(r"^[^@]+@[^@]+\.[^@]+$", user_data.login):
             subject = "Tasdiqlash kodi"
             body = f"UrgutPlease uchun tasdiqlash kodi: {verification_code}"
             EmailClient().send_email(user_data.login, subject, body)
-
 
         return UserResponse(
             message="User registered successfully. Please verify your account.",
@@ -221,14 +232,15 @@ async def get_user(
         )
     return user
 
-@router.put("/{user_id}", response_model=UserResponse) # TODO: consider security to change role
+@router.put("/{user_id}", response_model=UserResponse)
 async def update_user(
     user_id: int,
-    user_data: UserUpdate,
+    user_data: UserUpdate = Depends(UserUpdate.as_form),
+    image: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
-    """Update a user (self or admin)."""
+    """Update a user with optional profile image (self or admin)."""
     user = session.exec(select(User).where(User.id == user_id)).first()
     if not user:
         raise HTTPException(
@@ -241,6 +253,7 @@ async def update_user(
             detail="Not authorized to update this user"
         )
     
+    # Update basic fields
     update_data = user_data.model_dump(exclude_unset=True)
     
     # Handle password update
@@ -250,6 +263,19 @@ async def update_user(
     # Update other fields
     for key, value in update_data.items():
         setattr(user, key, value)
+    
+    # Handle profile image
+    if image is not None:  # If image field is provided (even if empty)
+        # Delete old image if exists
+        if user.image_url:
+            await image_service.delete_image(user.image_url)
+        
+        # Save new image if provided
+        if image:
+            image_path = await image_service.save_image(image, "users")
+            user.image_url = image_path
+        else:
+            user.image_url = None
     
     user.updated_at = datetime.utcnow()
     session.add(user)
@@ -280,6 +306,10 @@ async def delete_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this user"
         )
+    
+    # Delete profile image if exists
+    if user.image_url:
+        await image_service.delete_image(user.image_url)
     
     session.delete(user)
     session.commit()

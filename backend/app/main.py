@@ -4,6 +4,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.openapi.utils import get_openapi
 import logging
+import os
+from app.core.s3_service import S3Service
 
 from app.db.session import create_db_and_tables
 from app.users.router import router as users_router
@@ -25,7 +27,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     print("Database and tables created.")
-    
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -87,3 +88,14 @@ app.include_router(ratings_router)
 @app.head("/", include_in_schema=False)
 def root():
     return {"message": "Service is up"}
+
+@app.get("/test-s3", include_in_schema=False)
+async def test_s3():
+    try:
+        s3_service = S3Service()
+        # Try to list objects in the bucket
+        response = s3_service.s3_client.list_objects_v2(Bucket=settings.S3_BUCKET_NAME, MaxKeys=1)
+        return {"status": "success", "message": "S3 connection successful"}
+    except Exception as e:
+        logger.error(f"S3 connection test failed: {str(e)}")
+        return {"status": "error", "message": f"S3 connection failed: {str(e)}"}

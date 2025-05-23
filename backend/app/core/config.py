@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     # SMS
     ESKIZ_EMAIL: str
     ESKIZ_PASSWORD: str
+
+    # AWS S3
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+    AWS_REGION: str = "us-east-1"
+    S3_BUCKET_NAME: str
+    S3_ENDPOINT_URL: Optional[str] = None
+
+    # Admin Configuration
+    DEFAULT_ADMIN_EMAIL: str
+    DEFAULT_ADMIN_PASSWORD: str
+    DEFAULT_ADMIN_FIRSTNAME: str
+    DEFAULT_ADMIN_LASTNAME: str
     
     class Config:
         case_sensitive = True

@@ -1,10 +1,11 @@
 from pydantic import BaseModel, EmailStr, constr, validator
-from typing import Annotated
+from typing import Annotated, Optional
 from pydantic import StringConstraints
 from datetime import datetime
-from typing import Optional
 from app.models.user import UserRole
+from fastapi import Form
 import re
+from app.core.image_service import ImageService
 
 # Phone number validation regex
 PHONE_REGEX = r'^\+998\d{9}$'
@@ -24,7 +25,6 @@ class UserCreate(BaseModel):
     phone: Optional[Annotated[str, StringConstraints(pattern=PHONE_REGEX)]] = None
     email: Optional[EmailStr] = None
     password: Annotated[str, StringConstraints(min_length=8)]
-    role: UserRole = UserRole.client
 
     @validator('login')
     def validate_login(cls, v):
@@ -42,6 +42,25 @@ class UserCreate(BaseModel):
             raise ValueError('Password must contain at least one number')
         return v
 
+    @classmethod
+    def as_form(
+        cls,
+        firstname: str = Form(...),
+        lastname: str = Form(...),
+        login: str = Form(...),
+        phone: Optional[str] = Form(None),
+        email: Optional[str] = Form(None),
+        password: str = Form(...),
+    ):
+        return cls(
+            firstname=firstname,
+            lastname=lastname,
+            login=login,
+            phone=phone,
+            email=email,
+            password=password
+        )
+
 class UserRead(BaseModel):
     id: int
     firstname: str
@@ -51,11 +70,20 @@ class UserRead(BaseModel):
     email: Optional[str]
     role: UserRole
     is_verified: bool
+    full_image_url: Optional[str]  # Full URL for the image
     created_at: datetime
     last_login: Optional[datetime]
 
     class Config:
         from_attributes = True
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if hasattr(self, 'image_url') and self.image_url:
+            image_service = ImageService()
+            self.full_image_url = image_service.get_image_url(self.image_url)
+        else:
+            self.full_image_url = None
 
 class UserUpdate(BaseModel):
     firstname: Optional[Annotated[str, StringConstraints(min_length=2, max_length=50)]] = None
@@ -63,7 +91,6 @@ class UserUpdate(BaseModel):
     phone: Optional[Annotated[str, StringConstraints(pattern=PHONE_REGEX)]] = None
     email: Optional[EmailStr] = None
     password: Optional[Annotated[str, StringConstraints(min_length=8)]] = None
-    role: Optional[UserRole] = None
 
     @validator('password')
     def validate_password(cls, v):
@@ -75,6 +102,23 @@ class UserUpdate(BaseModel):
             if not re.search(r'\d', v):
                 raise ValueError('Password must contain at least one number')
         return v
+
+    @classmethod
+    def as_form(
+        cls,
+        firstname: Optional[str] = Form(None),
+        lastname: Optional[str] = Form(None),
+        phone: Optional[str] = Form(None),
+        email: Optional[str] = Form(None),
+        password: Optional[str] = Form(None),
+    ):
+        return cls(
+            firstname=firstname,
+            lastname=lastname,
+            phone=phone,
+            email=email,
+            password=password
+        )
 
 class UserResponse(BaseModel):
     message: str
