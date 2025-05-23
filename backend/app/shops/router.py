@@ -179,3 +179,23 @@ async def delete_shop(
     session.delete(shop)
     session.commit()
     return {"message": "Shop deleted"}
+
+@router.patch("/{shop_id}/feature", response_model=ShopRead)
+async def toggle_shop_featured(
+    shop_id: int,
+    is_featured: bool,
+    current_user: User = Depends(get_admin_user),
+    session: Session = Depends(get_session)
+):
+    """Toggle a shop's featured status (admin only)."""
+    shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    
+    shop.is_featured = is_featured
+    shop.updated_at = datetime.utcnow()
+    
+    session.add(shop)
+    session.commit()
+    session.refresh(shop)
+    return shop

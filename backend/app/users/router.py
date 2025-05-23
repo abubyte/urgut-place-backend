@@ -11,10 +11,10 @@ from app.db.session import get_session
 from app.models.user import User, UserRole
 from app.schemas.user import (
     UserCreate, UserRead, UserUpdate, UserResponse,
-    UserListResponse, UserVerifyRequest
+    UserListResponse, UserVerifyRequest, UserRoleUpdate
 )
 from app.auth.dependencies import get_current_user, get_admin_user
-from app.core.security import create_access_token, get_password_hash
+from app.core.security import create_access_token, get_password_hash, create_tokens, verify_token
 from app.core.config import settings
 from app.core.rate_limit import rate_limit
 from app.core.image_service import ImageService
@@ -149,7 +149,7 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session)
 ):
-    """Login user and return access token."""
+    """Login user and return access and refresh tokens."""
     user = session.exec(
         select(User).where(User.login == form_data.username)
     ).first()
@@ -177,6 +177,39 @@ async def login(
     session.add(user)
     session.commit()
     
+    # Create both access and refresh tokens
+    access_token, refresh_token = create_tokens(data={"sub": user.login})
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
+
+@router.post("/refresh", response_model=dict)
+@rate_limit(times=5, minutes=15)
+async def refresh_token(
+    refresh_token: str,
+    session: Session = Depends(get_session)
+):
+    """Get a new access token using refresh token."""
+    username = verify_token(refresh_token)
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token"
+        )
+    
+    user = session.exec(
+        select(User).where(User.login == username)
+    ).first()
+    
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token"
+        )
+    
+    # Create new access token
     access_token = create_access_token(data={"sub": user.login})
     return {
         "access_token": access_token,
@@ -315,3 +348,30 @@ async def delete_user(
     session.commit()
     
     return {"message": "User deleted successfully"}
+
+@router.patch("/{user_id}/role", response_model=UserResponse)
+async def update_user_role(
+    user_id: int,
+    role_data: UserRoleUpdate,
+    current_user: User = Depends(get_admin_user),
+    session: Session = Depends(get_session)
+):
+    """Update a user's role (admin only)."""
+    user = session.exec(select(User).where(User.id == user_id)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    user.role = role_data.role
+    user.updated_at = datetime.utcnow()
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    return UserResponse(
+        message="User role updated successfully",
+        user=user
+    )
