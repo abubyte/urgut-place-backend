@@ -12,7 +12,7 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 @router.post("", response_model=CategoryRead)
 async def create_category(
-    category_data: CategoryCreate,
+    category_data: CategoryCreate = Depends(CategoryCreate.as_form),
     current_user: User = Depends(get_admin_user),
     session: Session = Depends(get_session)
 ):
@@ -47,7 +47,7 @@ async def get_category(
 @router.put("/{category_id}", response_model=CategoryRead)
 async def update_category(
     category_id: int,
-    category_data: CategoryUpdate,
+    category_data: CategoryUpdate = Depends(CategoryUpdate.as_form),
     current_user: User = Depends(get_admin_user),
     session: Session = Depends(get_session)
 ):

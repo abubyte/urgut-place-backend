@@ -1,12 +1,13 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 from datetime import datetime
 from typing import List, Optional
 from fastapi import Form
+import json
 
 class ShopCreate(BaseModel):
     name: str
     work_time: str
-    description: Optional[str] = None
+    description: str
     category_id: int
     seller_phone: str
     location_lat: float
@@ -18,7 +19,7 @@ class ShopCreate(BaseModel):
         cls,
         name: str = Form(...),
         work_time: str = Form(...),
-        description: Optional[str] = Form(None),
+        description: str = Form(...),
         category_id: int = Form(...),
         seller_phone: str = Form(...),
         location_lat: float = Form(...),
@@ -40,9 +41,9 @@ class ShopRead(BaseModel):
     id: int
     name: str
     work_time: str
-    description: Optional[str]
-    image_urls: Optional[List[str]]
+    description: str
     category_id: int
+    image_urls: Optional[List[str]] = None
     seller_phone: str
     rating: float
     rating_count: int
@@ -57,36 +58,27 @@ class ShopRead(BaseModel):
     class Config:
         from_attributes = True
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        if hasattr(self, 'images') and self.images:
-            from app.core.image_service import ImageService
-            image_service = ImageService()
-            self.image_urls = [image_service.get_image_url(img) for img in self.images]
-        else:
-            self.image_urls = []
-
 class ShopUpdate(BaseModel):
-    name: Optional[str] = None
-    work_time: Optional[str] = None
-    description: Optional[str] = None
-    category_id: Optional[int] = None
-    seller_phone: Optional[str] = None
-    location_lat: Optional[float] = None
-    location_long: Optional[float] = None
-    location_str: Optional[str] = None
+    name: str
+    work_time: str
+    description: str
+    category_id: int
+    seller_phone: str
+    location_lat: float
+    location_long: float
+    location_str: str
 
     @classmethod
     def as_form(
         cls,
-        name: Optional[str] = Form(None),
-        work_time: Optional[str] = Form(None),
-        description: Optional[str] = Form(None),
-        category_id: Optional[int] = Form(None),
-        seller_phone: Optional[str] = Form(None),
-        location_lat: Optional[float] = Form(None),
-        location_long: Optional[float] = Form(None),
-        location_str: Optional[str] = Form(None),
+        name: str = Form(...),
+        work_time: str = Form(...),
+        description: str = Form(...),
+        category_id: int = Form(...),
+        seller_phone: str = Form(...),
+        location_lat: float = Form(...),
+        location_long: float = Form(...),
+        location_str: str = Form(...),
     ):
         return cls(
             name=name,

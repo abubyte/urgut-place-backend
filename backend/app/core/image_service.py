@@ -1,11 +1,17 @@
 import os
 import uuid
+import logging
 from fastapi import UploadFile, HTTPException
 from PIL import Image
 import aiofiles
 from typing import List
 import shutil
 from app.core.s3_service import S3Service
+from botocore.exceptions import ClientError
+
+# Set up logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class ImageService:
     def __init__(self):
@@ -16,12 +22,14 @@ class ImageService:
 
     async def save_image(self, file: UploadFile, entity_type: str) -> str:
         """Save an uploaded image and return its path."""
-        if not file:
-            raise HTTPException(status_code=400, detail="No file provided")
+        if not file or not file.filename:
+            logger.warning("No file provided or file has no name.")
+            return None # Return None if no file is provided or it's empty
 
         # Validate file extension
         ext = os.path.splitext(file.filename)[1].lower()
         if ext not in self.allowed_extensions:
+            logger.warning(f"Invalid file type: {file.filename}. Allowed types: {', '.join(self.allowed_extensions)}")
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid file type. Allowed types: {', '.join(self.allowed_extensions)}"
@@ -36,6 +44,9 @@ class ImageService:
             # Save file temporarily
             async with aiofiles.open(temp_path, 'wb') as out_file:
                 content = await file.read()
+                if len(content) == 0:
+                    logger.warning(f"Uploaded file is empty: {file.filename}")
+                    return None # Return None if the file is empty after reading
                 if len(content) > self.max_file_size:
                     raise HTTPException(status_code=400, detail="File too large. Max size: 5MB")
                 await out_file.write(content)
@@ -57,8 +68,15 @@ class ImageService:
 
             # Upload to S3
             s3_path = await self.s3_service.upload_file(temp_path, s3_path)
+            logger.info(f"Successfully uploaded {file.filename} to S3 path: {s3_path}")
             return s3_path
 
+        except ClientError as e:
+            logger.error(f"S3 Client Error uploading file {file.filename}: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error uploading file to storage") from e
+        except Exception as e:
+            logger.error(f"An unexpected error occurred while processing file {file.filename}: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error processing image") from e
         finally:
             # Clean up temp file
             if os.path.exists(temp_path):

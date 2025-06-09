@@ -17,9 +17,7 @@ async def create_like(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
-    """Create a like for a shop (clients only)."""
-    if current_user.role != "client":
-        raise HTTPException(status_code=403, detail="Only clients can like shops")
+    """Create a like for a shop."""
 
     existing_like = session.exec(
         select(Like).where(Like.user_id == current_user.id, Like.shop_id == like_data.shop_id)

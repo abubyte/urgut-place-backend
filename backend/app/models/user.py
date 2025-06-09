@@ -1,8 +1,9 @@
-from sqlmodel import SQLModel, Field
-from typing import Optional
+from sqlmodel import SQLModel, Field, Relationship
+from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 from passlib.context import CryptContext
+import json
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -19,7 +20,7 @@ class User(SQLModel, table=True):
     phone: Optional[str] = Field(default=None, index=True, nullable=True)
     email: Optional[str] = Field(default=None, index=True, nullable=True)
     hashed_password: str
-    image_url: Optional[str] = Field(default=None, nullable=True)
+    image_url: Optional[str] = Field(default=None, nullable=True)  # Single S3 URL for profile image
     role: UserRole = Field(default=UserRole.client)
     is_verified: bool = Field(default=False)
     is_active: bool = Field(default=True)
@@ -39,3 +40,5 @@ class User(SQLModel, table=True):
     def update_password(self, new_password: str) -> None:
         self.hashed_password = self.get_password_hash(new_password)
         self.updated_at = datetime.utcnow()
+        
+    

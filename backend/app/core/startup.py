@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 async def ensure_admin_exists():
     """Ensure that at least one admin user exists in the database."""
-    logger.info(f"Database URL: {settings.DATABASE_URL}")  # Log the database URL (without credentials)
+    logger.info(f"Database URL: {settings.DATABASE_URL}")
     session = Session(engine)
     try:
         logger.info("Checking for existing admin user...")
@@ -29,7 +29,7 @@ async def ensure_admin_exists():
                     login=settings.DEFAULT_ADMIN_EMAIL,
                     hashed_password=User.get_password_hash(settings.DEFAULT_ADMIN_PASSWORD),
                     role=UserRole.admin,
-                    is_verified=True,  # Admin is pre-verified
+                    is_verified=True,
                     is_active=True
                 )
                 logger.info("Adding admin user to session...")
@@ -37,7 +37,7 @@ async def ensure_admin_exists():
                 logger.info("Committing admin user to database...")
                 session.commit()
                 logger.info("Refreshing admin user from database...")
-                session.refresh(admin)  # Refresh to get the created user
+                session.refresh(admin)
                 logger.info(f"Default admin user created successfully with ID: {admin.id}")
                 logger.warning(
                     "IMPORTANT: Please change the default admin password immediately! "
@@ -47,13 +47,13 @@ async def ensure_admin_exists():
                 logger.error(f"Database error while creating admin: {str(e)}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 session.rollback()
-                # Don't raise here, just log the error
+
                 logger.error("Failed to create admin user, but continuing application startup")
             except Exception as e:
                 logger.error(f"Unexpected error while creating admin: {str(e)}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 session.rollback()
-                # Don't raise here, just log the error
+
                 logger.error("Failed to create admin user, but continuing application startup")
         else:
             logger.info(f"Admin user already exists with ID: {admin.id}")
@@ -63,7 +63,7 @@ async def ensure_admin_exists():
         logger.error(f"Error ensuring admin exists: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         session.rollback()
-        # Don't raise here, just log the error
+
         logger.error("Failed to check/create admin user, but continuing application startup")
     finally:
         session.close() 

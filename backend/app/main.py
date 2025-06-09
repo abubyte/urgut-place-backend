@@ -9,13 +9,15 @@ from app.core.s3_service import S3Service
 import traceback
 
 from app.db.session import create_db_and_tables
+from app.auth.router import router as auth_router
 from app.users.router import router as users_router
-from app.shops.router import router as shops_router
 from app.categories.router import router as categories_router 
+from app.shops.router import router as shops_router
 from app.likes.router import router as likes_router 
 from app.ratings.router import router as ratings_router
-from app.models import shop, category, user, like, rating
+# from app.models import shop, category, user, like, rating
 from app.core.startup import ensure_admin_exists
+from app.core.config import settings
 
 # Set up logging
 logging.basicConfig(
@@ -95,9 +97,10 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 # Include routers
+app.include_router(auth_router)
 app.include_router(users_router)
-app.include_router(shops_router)
 app.include_router(categories_router)
+app.include_router(shops_router)
 app.include_router(likes_router)
 app.include_router(ratings_router)
 
@@ -110,7 +113,6 @@ def root():
 async def test_s3():
     try:
         s3_service = S3Service()
-        # Try to list objects in the bucket
         response = s3_service.s3_client.list_objects_v2(Bucket=settings.S3_BUCKET_NAME, MaxKeys=1)
         return {"status": "success", "message": "S3 connection successful"}
     except Exception as e:

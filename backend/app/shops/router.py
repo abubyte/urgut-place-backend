@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from pydantic import BeforeValidator
 from sqlmodel import Session, select, or_, desc, asc
-from typing import List, Optional
+from typing import Annotated, Any, List, Optional, Union
 from datetime import datetime
 from enum import Enum
-import json
+from pydantic.json_schema import SkipJsonSchema
 
 from app.db.session import get_session
 from app.models.shop import Shop
@@ -15,6 +16,11 @@ from app.core.image_service import ImageService
 
 router = APIRouter(prefix="/shops", tags=["shops"])
 image_service = ImageService()
+
+def empty_str_to_none(v: Any) -> Any:
+    if v == "" or v is None:
+        return []
+    return v
 
 class SortField(str, Enum):
     rating = "rating"
@@ -35,30 +41,34 @@ async def create_shop(
     session: Session = Depends(get_session)
 ):
     """Create a new shop with images (admin only)."""
-    # Validate category
-    category = session.exec(select(Category).where(Category.id == shop_data.category_id)).first()
-    if not category:
-        raise HTTPException(status_code=404, detail="Category not found")
-    
-    # Create shop
-    shop = Shop(**shop_data.model_dump())
-    session.add(shop)
-    session.commit()
-    session.refresh(shop)
-    
-    # Handle images if provided
-    if images:
-        image_paths = []
-        for image in images:
-            image_path = await image_service.save_image(image, "shops")
-            image_paths.append(image_path)
+    try:
+        # Validate category
+        category = session.exec(select(Category).where(Category.id == shop_data.category_id)).first()
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
         
-        shop.images = image_paths
+        # Create shop
+        shop = Shop(**shop_data.model_dump())
         session.add(shop)
         session.commit()
         session.refresh(shop)
-    
-    return shop
+        
+        # Handle images if provided
+        if images:
+            image_paths = []
+            for image in images:
+                image_path = image_service.get_image_url(await image_service.save_image(image, "shops"))
+                if image_path:
+                    image_paths.append(image_path)
+            
+            shop.image_urls = image_paths
+            session.add(shop)
+            session.commit()
+            session.refresh(shop)
+        
+        return shop
+    finally:
+        session.close()
 
 @router.get("", response_model=List[ShopRead])
 async def list_shops(
@@ -72,34 +82,37 @@ async def list_shops(
     limit: int = Query(10, ge=1, le=100, description="Maximum number of shops to return"),
 ):
     """List all shops with optional filtering, search, sorting, and pagination (all users)."""
-    query = select(Shop)
-    
-    # Apply category filter if provided
-    if category_id is not None:
-        query = query.where(Shop.category_id == category_id)
-    
-    # Apply search if provided
-    if search:
-        search_term = f"%{search}%"
-        query = query.where(
-            or_(
-                Shop.name.ilike(search_term),
-                Shop.description.ilike(search_term),
-                Shop.location_str.ilike(search_term)
+    try:
+        query = select(Shop)
+        
+        # Apply category filter if provided
+        if category_id is not None:
+            query = query.where(Shop.category_id == category_id)
+        
+        # Apply search if provided
+        if search:
+            search_term = f"%{search}%"
+            query = query.where(
+                or_(
+                    Shop.name.ilike(search_term),
+                    Shop.description.ilike(search_term),
+                    Shop.location_str.ilike(search_term)
+                )
             )
-        )
-    
-    # Apply sorting
-    sort_column = getattr(Shop, sort_by.value)
-    if sort_order == SortOrder.desc:
-        query = query.order_by(desc(sort_column))
-    else:
-        query = query.order_by(asc(sort_column))
-    
-    # Apply pagination
-    query = query.offset(skip).limit(limit)
-    shops = session.exec(query).all()
-    return shops
+        
+        # Apply sorting
+        sort_column = getattr(Shop, sort_by.value)
+        if sort_order == SortOrder.desc:
+            query = query.order_by(desc(sort_column))
+        else:
+            query = query.order_by(asc(sort_column))
+        
+        # Apply pagination
+        query = query.offset(skip).limit(limit)
+        shops = session.exec(query).all()
+        return shops
+    finally:
+        session.close()
 
 @router.get("/{shop_id}", response_model=ShopRead)
 async def get_shop(
@@ -108,58 +121,79 @@ async def get_shop(
     current_user: User = Depends(get_current_user)
 ):
     """Get a shop by ID (all users)."""
-    shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
-    if not shop:
-        raise HTTPException(status_code=404, detail="Shop not found")
-    return shop
+    try:
+        shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
+        if not shop:
+            raise HTTPException(status_code=404, detail="Shop not found")
+        return shop
+    finally:
+        session.close()
 
 @router.put("/{shop_id}", response_model=ShopRead)
 async def update_shop(
     shop_id: int,
     shop_data: ShopUpdate = Depends(ShopUpdate.as_form),
-    images: Optional[List[UploadFile]] = File(None),
+    images: List[UploadFile] = File(default=[]),
     current_user: User = Depends(get_admin_user),
     session: Session = Depends(get_session)
 ):
     """Update a shop with images (admin only)."""
-    shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
-    if not shop:
-        raise HTTPException(status_code=404, detail="Shop not found")
-    
-    # Update basic fields
-    update_data = shop_data.model_dump(exclude_unset=True)
-    
-    # Validate category if being updated
-    if "category_id" in update_data:
-        category = session.exec(select(Category).where(Category.id == update_data["category_id"])).first()
-        if not category:
-            raise HTTPException(status_code=404, detail="Category not found")
-    
-    # Update fields
-    for key, value in update_data.items():
-        setattr(shop, key, value)
-    
-    # Handle images
-    if images is not None:  # If images field is provided (even if empty)
-        # Delete old images
-        if shop.images:
-            await image_service.delete_images(shop.images)
+    try:
+        shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
+        if not shop:
+            raise HTTPException(status_code=404, detail="Shop not found")
         
-        # Save new images if provided
+        # Update basic fields
+        update_data = shop_data.model_dump(exclude_unset=True)
+        
+        # Validate category if being updated
+        if "category_id" in update_data:
+            category = session.exec(select(Category).where(Category.id == update_data["category_id"])).first()
+            if not category:
+                raise HTTPException(status_code=404, detail="Category not found")
+        
+        # Update fields
+        for key, value in update_data.items():
+            setattr(shop, key, value)
+        
         if images:
-            image_paths = []
+            valid_images = []
             for image in images:
-                image_path = await image_service.save_image(image, "shops")
-                image_paths.append(image_path)
-            shop.images = image_paths
-        else:
-            shop.images = []
-    
-    shop.updated_at = datetime.utcnow()
-    session.add(shop)
-    session.commit()
-    session.refresh(shop)
-    return shop
+                if (image and 
+                    hasattr(image, 'filename') and 
+                    image.filename and 
+                    image.filename.strip() and
+                    image.size > 0):
+                    valid_images.append(image)
+            
+            if valid_images:  # Only process if we have valid images
+                # Delete old images
+                if shop.image_urls:
+                    old_images = shop.image_urls
+                    await image_service.delete_images(old_images)
+                
+                # Save new images
+                image_paths = []
+                for image in valid_images:
+                    image_path = image_service.get_image_url(
+                        await image_service.save_image(image, "shops")
+                    )
+                    if image_path:
+                        image_paths.append(image_path)
+                shop.image_urls = image_paths
+            else:
+                # No valid images provided, clear existing images
+                if shop.image_urls:
+                    old_images = shop.image_urls
+                    await image_service.delete_images(old_images)
+                shop.image_urls = []
+        shop.updated_at = datetime.utcnow()
+        session.add(shop)
+        session.commit()
+        session.refresh(shop)
+        return shop
+    finally:
+        session.close()
 
 @router.delete("/{shop_id}")
 async def delete_shop(
@@ -168,17 +202,21 @@ async def delete_shop(
     session: Session = Depends(get_session)
 ):
     """Delete a shop (admin only)."""
-    shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
-    if not shop:
-        raise HTTPException(status_code=404, detail="Shop not found")
-    
-    # Delete shop images
-    if shop.images:
-        await image_service.delete_images(shop.images)
-    
-    session.delete(shop)
-    session.commit()
-    return {"message": "Shop deleted"}
+    try:
+        shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
+        if not shop:
+            raise HTTPException(status_code=404, detail="Shop not found")
+        
+        # Delete shop images
+        if shop.image_urls:
+            old_images = shop.image_urls
+            await image_service.delete_images(old_images)
+        
+        session.delete(shop)
+        session.commit()
+        return {"message": "Shop deleted"}
+    finally:
+        session.close()
 
 @router.patch("/{shop_id}/feature", response_model=ShopRead)
 async def toggle_shop_featured(
@@ -188,14 +226,17 @@ async def toggle_shop_featured(
     session: Session = Depends(get_session)
 ):
     """Toggle a shop's featured status (admin only)."""
-    shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
-    if not shop:
-        raise HTTPException(status_code=404, detail="Shop not found")
-    
-    shop.is_featured = is_featured
-    shop.updated_at = datetime.utcnow()
-    
-    session.add(shop)
-    session.commit()
-    session.refresh(shop)
-    return shop
+    try:
+        shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
+        if not shop:
+            raise HTTPException(status_code=404, detail="Shop not found")
+        
+        shop.is_featured = is_featured
+        shop.updated_at = datetime.utcnow()
+        
+        session.add(shop)
+        session.commit()
+        session.refresh(shop)
+        return shop
+    finally:
+        session.close()

@@ -1,18 +1,35 @@
+from fastapi import Form
 from pydantic import BaseModel
 from typing import Optional
 
 class CategoryCreate(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str
+    
+    @classmethod
+    def as_form(
+        cls,
+        name: str = Form(...),
+        description: str = Form(...),
+    ):
+        return cls(name=name, description=description)
 
 class CategoryRead(BaseModel):
     id: int
     name: str
-    description: Optional[str]
+    description: str
 
     class Config:
         from_attributes = True
 
 class CategoryUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: str
+    description: str
+    
+    @classmethod
+    def as_form(
+        cls,
+        name: str = Form(...),
+        description: str = Form(...),
+    ):
+        return cls(name=name, description=description)

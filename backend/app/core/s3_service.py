@@ -15,7 +15,12 @@ class S3Service:
             aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
             region_name=settings.AWS_REGION,
-            endpoint_url=settings.S3_ENDPOINT_URL
+            endpoint_url=settings.S3_ENDPOINT_URL,
+            config=boto3.session.Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'virtual'},
+                retries={'max_attempts': 3}
+            )
         )
         self.bucket_name = settings.S3_BUCKET_NAME
 
@@ -67,7 +72,7 @@ class S3Service:
             raise HTTPException(status_code=500, detail="Error deleting files from storage")
 
     def get_file_url(self, object_name: str) -> str:
-        """Get the URL for a file in S3 bucket."""
+        """Get the permanent URL for a file in S3 bucket."""
         if not object_name:
             return None
 
@@ -76,12 +81,9 @@ class S3Service:
             object_name = object_name[1:]
 
         try:
-            url = self.s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': self.bucket_name, 'Key': object_name},
-                ExpiresIn=3600  # URL expires in 1 hour
-            )
+            # Generate permanent URL using the bucket's endpoint
+            url = f"https://{self.bucket_name}.s3.{settings.AWS_REGION}.amazonaws.com/{object_name}"
             return url
-        except ClientError as e:
+        except Exception as e:
             logger.error(f"Error generating URL for S3 file: {str(e)}")
             raise HTTPException(status_code=500, detail="Error generating file URL") 

@@ -48,3 +48,6 @@ build/
 # Others
 *.bak
 .idea/
+reset_db.py
+.gitignore
+alembic.ini
