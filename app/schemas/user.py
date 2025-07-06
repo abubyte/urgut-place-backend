@@ -125,3 +125,31 @@ class UserRoleUpdate(BaseModel):
         role: UserRole = Form(...),
     ):
         return cls(role=role)
+    
+class UserLogin(BaseModel):
+    login: Annotated[str, StringConstraints(pattern=LOGIN_REGEX)]
+    password: Annotated[str, StringConstraints(min_length=8)]
+
+    @validator('login')
+    def validate_login(cls, v):
+        if not re.match(LOGIN_REGEX, v):
+            raise ValueError('Login can only be email or Uzbekistan phone number')
+        return v
+
+    @validator('password')
+    def validate_password(cls, v):
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one number')
+        return v
+
+    @classmethod
+    def as_form(
+        cls,
+        login: str = Form(...),
+        password: str = Form(...),
+    ):
+        return cls(login=login, password=password)

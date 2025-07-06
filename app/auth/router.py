@@ -11,7 +11,7 @@ from app.auth.eskiz_client import EskizClient
 from app.db.session import get_session
 from app.models.user import User
 from app.schemas.user import (
-    UserCreate, UserResponse, UserVerifyRequest
+    UserCreate, UserResponse, UserVerifyRequest, UserLogin
 )
 
 from app.core.security import create_access_token, get_password_hash, create_tokens, verify_token
@@ -168,15 +168,15 @@ async def verify_user(
 @router.post("/login", response_model=dict)
 @rate_limit(times=5, minutes=15)
 async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
+    login_data: UserLogin = Depends(UserLogin.as_form),
     session: Session = Depends(get_session)
 ):
     """Login user and return access and refresh tokens."""
     user = session.exec(
-        select(User).where(User.login == form_data.username)
+        select(User).where(User.login == login_data.login)
     ).first()
     
-    if not user or not user.verify_password(form_data.password):
+    if not user or not user.verify_password(login_data.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect login or password"
