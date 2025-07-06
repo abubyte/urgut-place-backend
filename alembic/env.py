@@ -11,7 +11,6 @@ from app.models.like import Like
 from app.models.user import User
 from app.models.rating import Rating
 from app.models.category import Category
-from app.models.seller import Seller
 from sqlmodel import SQLModel
 
 # this is the Alembic Config object, which provides
