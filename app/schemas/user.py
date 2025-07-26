@@ -30,8 +30,6 @@ class UserCreate(BaseModel):
     firstname: Annotated[str, StringConstraints(min_length=2, max_length=50)]
     lastname: Annotated[str, StringConstraints(min_length=2, max_length=50)]
     login: Annotated[str, StringConstraints(min_length=3, max_length=50)]
-    phone: Optional[Annotated[str, StringConstraints(pattern=PHONE_REGEX)]] = None
-    email: Optional[EmailStr] = None
     password: Annotated[str, StringConstraints(min_length=8)]
 
     @validator('login')
@@ -56,16 +54,12 @@ class UserCreate(BaseModel):
         firstname: str = Form(...),
         lastname: str = Form(...),
         login: str = Form(...),
-        phone: Optional[str] = Form(None),
-        email: Optional[str] = Form(None),
         password: str = Form(...),
     ):
         return cls(
             firstname=firstname,
             lastname=lastname,
             login=login,
-            phone=phone,
-            email=email,
             password=password,
         )
 
@@ -74,8 +68,6 @@ class UserRead(BaseModel):
     firstname: str
     lastname: str
     login: str
-    phone: Optional[str]
-    email: Optional[str]
     role: UserRole
     is_verified: bool
     image_url: Optional[str]  
@@ -88,22 +80,16 @@ class UserRead(BaseModel):
 class UserUpdate(BaseModel):
     firstname: str = Form(...)
     lastname: str = Form(...)
-    phone: Optional[str] = Form(None)
-    email: Optional[str] = Form(None)
 
     @classmethod
     def as_form(
         cls,
         firstname: str = Form(...),
         lastname: str = Form(...),
-        phone: Optional[str] = Form(None),
-        email: Optional[str] = Form(None),
     ):
         return cls(
             firstname=firstname,
             lastname=lastname,
-            phone=phone,
-            email=email,
         )
 
 class UserResponse(BaseModel):
