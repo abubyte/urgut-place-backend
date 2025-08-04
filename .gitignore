@@ -1,0 +1,60 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env/
+venv/
+.venv/
+
+# Environment variables
+.env
+*.env
+
+# VSCode and IDE settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Pip tools
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Pytest and coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.xml
+.cache/
+.pytest_cache/
+
+# Build and distribution
+build/
+dist/
+*.egg-info/
+.eggs/
+MANIFEST
+
+# Mypy, Pylint, Bandit, etc.
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+.pylint.d/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs and local debug
+*.log
+*.sqlite3
+*.db
+*.pid
+
+# FastAPI or Flask specific
+instance/

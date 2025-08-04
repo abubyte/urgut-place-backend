@@ -73,7 +73,7 @@ async def create_shop(
 @router.get("", response_model=List[ShopRead])
 async def list_shops(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    # current_user: User = Depends(get_current_user),
     category_id: Optional[int] = Query(None, description="Filter by category ID"),
     search: Optional[str] = Query(None, description="Search in name, description, and location"),
     sort_by: SortField = Query(SortField.rating, description="Field to sort by"),
@@ -118,7 +118,7 @@ async def list_shops(
 async def get_shop(
     shop_id: int,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    # current_user: User = Depends(get_current_user)
 ):
     """Get a shop by ID (all users)."""
     try:
