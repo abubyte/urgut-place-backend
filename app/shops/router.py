@@ -76,6 +76,7 @@ async def list_shops(
     # current_user: User = Depends(get_current_user),
     category_id: Optional[int] = Query(None, description="Filter by category ID"),
     search: Optional[str] = Query(None, description="Search in name, description, and location"),
+    featured: Optional[bool] = Query(None, description="Filter by featured status"),
     sort_by: SortField = Query(SortField.rating, description="Field to sort by"),
     sort_order: SortOrder = Query(SortOrder.desc, description="Sort order (asc or desc)"),
     skip: int = Query(0, ge=0, description="Number of shops to skip (pagination)"),
@@ -84,6 +85,12 @@ async def list_shops(
     """List all shops with optional filtering, search, sorting, and pagination (all users)."""
     try:
         query = select(Shop)
+
+        # Apply featured filter if provided
+        if featured is not None:
+            query = query.where(Shop.is_featured == featured)
+            shops = session.exec(query).all()
+            return shops
         
         # Apply category filter if provided
         if category_id is not None:
@@ -100,12 +107,24 @@ async def list_shops(
                 )
             )
         
-        # Apply sorting
-        sort_column = getattr(Shop, sort_by.value)
-        if sort_order == SortOrder.desc:
-            query = query.order_by(desc(sort_column))
+        # Apply sorting: check if both parameters are at their default values
+        is_default_sort = (
+            sort_by == SortField.rating and 
+            sort_order == SortOrder.desc
+        )
+        
+        # If both are default, apply random ordering
+        if is_default_sort:
+            from sqlalchemy.sql.functions import random
+            query = query.order_by(random())
+        # Otherwise, apply the specified or default non-random sorting
         else:
-            query = query.order_by(asc(sort_column))
+            sort_column = getattr(Shop, sort_by.value)
+            if sort_order == SortOrder.desc:
+                query = query.order_by(desc(sort_column))
+            else:
+                query = query.order_by(asc(sort_column))
+        
         
         # Apply pagination
         query = query.offset(skip).limit(limit)
