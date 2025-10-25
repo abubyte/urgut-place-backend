@@ -5,6 +5,7 @@ from typing import Annotated, Any, List, Optional, Union
 from datetime import datetime
 from enum import Enum
 from pydantic.json_schema import SkipJsonSchema
+from dateutil.relativedelta import relativedelta
 
 from app.db.session import get_session
 from app.models.shop import Shop
@@ -33,6 +34,27 @@ class SortOrder(str, Enum):
     asc = "asc"
     desc = "desc"
 
+def auto_deactivate_expired_shops(session: Session):
+    """Automatically deactivate shops that have expired."""
+    try:
+        expired_shops = session.exec(
+            select(Shop).where(
+                Shop.is_active == True,
+                Shop.expires_at != None,
+                Shop.expires_at <= datetime.utcnow()
+            )
+        ).all()
+        
+        for shop in expired_shops:
+            shop.is_active = False
+            session.add(shop)
+        
+        if expired_shops:
+            session.commit()
+    except Exception as e:
+        session.rollback()
+        raise e
+
 @router.post("", response_model=ShopRead)
 async def create_shop(
     shop_data: ShopCreate = Depends(ShopCreate.as_form),
@@ -48,7 +70,13 @@ async def create_shop(
             raise HTTPException(status_code=404, detail="Category not found")
         
         # Create shop
-        shop = Shop(**shop_data.model_dump())
+        shop_dict = shop_data.model_dump()
+        
+        # Calculate expiration date
+        expires_at = datetime.utcnow() + relativedelta(months=shop_dict['expiration_months'])
+        shop_dict['expires_at'] = expires_at
+        
+        shop = Shop(**shop_dict)
         session.add(shop)
         session.commit()
         session.refresh(shop)
@@ -73,24 +101,32 @@ async def create_shop(
 @router.get("", response_model=List[ShopRead])
 async def list_shops(
     session: Session = Depends(get_session),
-    # current_user: User = Depends(get_current_user),
     category_id: Optional[int] = Query(None, description="Filter by category ID"),
     search: Optional[str] = Query(None, description="Search in name, description, and location"),
     featured: Optional[bool] = Query(None, description="Filter by featured status"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status (None=only active, True=active, False=inactive)"),
     sort_by: SortField = Query(SortField.rating, description="Field to sort by"),
     sort_order: SortOrder = Query(SortOrder.desc, description="Sort order (asc or desc)"),
     skip: int = Query(0, ge=0, description="Number of shops to skip (pagination)"),
     limit: int = Query(10, ge=1, le=100, description="Maximum number of shops to return"),
 ):
-    """List all shops with optional filtering, search, sorting, and pagination (all users)."""
+    """List shops with filtering. By default, only shows active and non-expired shops."""
     try:
+        # Auto-deactivate expired shops before listing
+        auto_deactivate_expired_shops(session)
+        
         query = select(Shop)
+
+        # Default behavior: only show active shops
+        if is_active is None:
+            query = query.where(Shop.is_active == True)
+        else:
+            # If explicitly specified, filter by is_active
+            query = query.where(Shop.is_active == is_active)
 
         # Apply featured filter if provided
         if featured is not None:
             query = query.where(Shop.is_featured == featured)
-            shops = session.exec(query).all()
-            return shops
         
         # Apply category filter if provided
         if category_id is not None:
@@ -107,24 +143,21 @@ async def list_shops(
                 )
             )
         
-        # Apply sorting: check if both parameters are at their default values
+        # Apply sorting
         is_default_sort = (
             sort_by == SortField.rating and 
             sort_order == SortOrder.desc
         )
         
-        # If both are default, apply random ordering
         if is_default_sort:
             from sqlalchemy.sql.functions import random
             query = query.order_by(random())
-        # Otherwise, apply the specified or default non-random sorting
         else:
             sort_column = getattr(Shop, sort_by.value)
             if sort_order == SortOrder.desc:
                 query = query.order_by(desc(sort_column))
             else:
                 query = query.order_by(asc(sort_column))
-        
         
         # Apply pagination
         query = query.offset(skip).limit(limit)
@@ -137,10 +170,12 @@ async def list_shops(
 async def get_shop(
     shop_id: int,
     session: Session = Depends(get_session),
-    # current_user: User = Depends(get_current_user)
 ):
     """Get a shop by ID (all users)."""
     try:
+        # Auto-deactivate expired shops
+        auto_deactivate_expired_shops(session)
+        
         shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
         if not shop:
             raise HTTPException(status_code=404, detail="Shop not found")
@@ -171,10 +206,17 @@ async def update_shop(
             if not category:
                 raise HTTPException(status_code=404, detail="Category not found")
         
+        # Recalculate expiration if expiration_months changed
+        if "expiration_months" in update_data:
+            shop.expiration_months = update_data["expiration_months"]
+            shop.expires_at = shop.created_at + relativedelta(months=shop.expiration_months)
+        
         # Update fields
         for key, value in update_data.items():
-            setattr(shop, key, value)
+            if key != "expiration_months":  # Already handled above
+                setattr(shop, key, value)
         
+        # Handle images
         if images:
             valid_images = []
             for image in images:
@@ -185,13 +227,11 @@ async def update_shop(
                     image.size > 0):
                     valid_images.append(image)
             
-            if valid_images:  # Only process if we have valid images
-                # Delete old images
+            if valid_images:
                 if shop.image_urls:
                     old_images = shop.image_urls
                     await image_service.delete_images(old_images)
                 
-                # Save new images
                 image_paths = []
                 for image in valid_images:
                     image_path = image_service.get_image_url(
@@ -201,11 +241,11 @@ async def update_shop(
                         image_paths.append(image_path)
                 shop.image_urls = image_paths
             else:
-                # No valid images provided, clear existing images
                 if shop.image_urls:
                     old_images = shop.image_urls
                     await image_service.delete_images(old_images)
                 shop.image_urls = []
+                
         shop.updated_at = datetime.utcnow()
         session.add(shop)
         session.commit()
@@ -251,6 +291,61 @@ async def toggle_shop_featured(
             raise HTTPException(status_code=404, detail="Shop not found")
         
         shop.is_featured = is_featured
+        shop.updated_at = datetime.utcnow()
+        
+        session.add(shop)
+        session.commit()
+        session.refresh(shop)
+        return shop
+    finally:
+        session.close()
+
+@router.patch("/{shop_id}/activate", response_model=ShopRead)
+async def activate_shop(
+    shop_id: int,
+    months: int = Form(..., ge=1, le=120, description="Number of months to activate the shop for"),
+    current_user: User = Depends(get_admin_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Activate an expired/inactive shop for specified number of months (admin only).
+    This will set is_active=True and calculate new expiration date from now.
+    """
+    try:
+        shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
+        if not shop:
+            raise HTTPException(status_code=404, detail="Shop not found")
+        
+        # Activate the shop
+        shop.is_active = True
+        shop.expiration_months = months
+        # Calculate new expiration from current time
+        shop.expires_at = datetime.utcnow() + relativedelta(months=months)
+        shop.updated_at = datetime.utcnow()
+        
+        session.add(shop)
+        session.commit()
+        session.refresh(shop)
+        return shop
+    finally:
+        session.close()
+
+@router.patch("/{shop_id}/deactivate", response_model=ShopRead)
+async def deactivate_shop(
+    shop_id: int,
+    current_user: User = Depends(get_admin_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Manually deactivate a shop (admin only).
+    This will set is_active=False regardless of expiration date.
+    """
+    try:
+        shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
+        if not shop:
+            raise HTTPException(status_code=404, detail="Shop not found")
+        
+        shop.is_active = False
         shop.updated_at = datetime.utcnow()
         
         session.add(shop)

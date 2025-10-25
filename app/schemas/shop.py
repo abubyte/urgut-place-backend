@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import Form
 import json
+from sqlmodel import Field
 
 class ShopCreate(BaseModel):
     name: str
@@ -13,6 +14,7 @@ class ShopCreate(BaseModel):
     location_lat: float
     location_long: float
     location_str: str
+    expiration_months: int = Field(default=12, ge=1, le=120)
 
     @classmethod
     def as_form(
@@ -25,6 +27,7 @@ class ShopCreate(BaseModel):
         location_lat: float = Form(...),
         location_long: float = Form(...),
         location_str: str = Form(...),
+        expiration_months: int = Form(default=12),
     ):
         return cls(
             name=name,
@@ -34,7 +37,8 @@ class ShopCreate(BaseModel):
             seller_phone=seller_phone,
             location_lat=location_lat,
             location_long=location_long,
-            location_str=location_str
+            location_str=location_str,
+            expiration_months=expiration_months
         )
 
 class ShopRead(BaseModel):
@@ -52,6 +56,11 @@ class ShopRead(BaseModel):
     location_long: float
     location_str: str
     is_featured: bool
+    expiration_months: int
+    expires_at: Optional[datetime]
+    is_active: bool
+    is_expired: bool
+    is_available: bool
     created_at: datetime
     updated_at: datetime
 
@@ -67,6 +76,7 @@ class ShopUpdate(BaseModel):
     location_lat: float
     location_long: float
     location_str: str
+    expiration_months: int = Field(default=12, ge=1, le=120)
 
     @classmethod
     def as_form(
@@ -79,6 +89,7 @@ class ShopUpdate(BaseModel):
         location_lat: float = Form(...),
         location_long: float = Form(...),
         location_str: str = Form(...),
+        expiration_months: int = Form(default=12),
     ):
         return cls(
             name=name,
@@ -88,5 +99,6 @@ class ShopUpdate(BaseModel):
             seller_phone=seller_phone,
             location_lat=location_lat,
             location_long=location_long,
-            location_str=location_str
+            location_str=location_str,
+            expiration_months=expiration_months 
         )

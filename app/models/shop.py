@@ -19,6 +19,9 @@ class Shop(SQLModel, table=True):
     location_long: float
     location_str: str
     is_featured: bool = Field(default=False)
+    expiration_months: int = Field(default=12)
+    expires_at: Optional[datetime] = Field(default=None, nullable=True)
+    is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -31,3 +34,15 @@ class Shop(SQLModel, table=True):
     def image_urls(self, values: List[str]):
         """Set the image URLs from a list."""
         self.image_urls_json = json.dumps(values)
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if shop has expired based on expires_at date."""
+        if self.expires_at is None:
+            return False
+        return datetime.utcnow() > self.expires_at
+    
+    @property
+    def is_available(self) -> bool:
+        """Check if shop is both active and not expired."""
+        return self.is_active and not self.is_expired
