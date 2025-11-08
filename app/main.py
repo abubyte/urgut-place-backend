@@ -73,7 +73,7 @@ def custom_openapi():
         return app.openapi_schema
 
     openapi_schema = get_openapi(
-        title="UrgutPlease API",
+        title="Urgut Savdo Kompleksi API",
         version="1.0.0",
         description="JWT Auth with Swagger",
         routes=app.routes,

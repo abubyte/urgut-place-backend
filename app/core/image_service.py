@@ -17,7 +17,7 @@ class ImageService:
     def __init__(self):
         self.allowed_extensions = {".jpg", ".jpeg", ".png", ".webp"}
         self.max_file_size = 5 * 1024 * 1024  # 5MB
-        self.max_dimension = 1920  # Max width/height in pixels
+        self.max_dimension = 4096  # Max width/height in pixels
         self.s3_service = S3Service()
 
     async def save_image(self, file: UploadFile, entity_type: str) -> str:
@@ -53,18 +53,24 @@ class ImageService:
 
             # Process image
             with Image.open(temp_path) as img:
+                original_format = img.format
                 # Convert to RGB if necessary
                 if img.mode in ('RGBA', 'P'):
                     img = img.convert('RGB')
                 
                 # Resize if too large
-                if max(img.size) > self.max_dimension:
+                if self.max_dimension and max(img.size) > self.max_dimension:
                     ratio = self.max_dimension / max(img.size)
                     new_size = tuple(int(dim * ratio) for dim in img.size)
                     img = img.resize(new_size, Image.Resampling.LANCZOS)
                 
                 # Save processed image
-                img.save(temp_path, quality=85, optimize=True)
+                save_kwargs = {"optimize": True}
+                if original_format and original_format.upper() == "JPEG":
+                    save_kwargs.update({"quality": 100, "subsampling": 0})
+                if original_format:
+                    save_kwargs["format"] = original_format
+                img.save(temp_path, **save_kwargs)
 
             # Upload to S3
             s3_path = await self.s3_service.upload_file(temp_path, s3_path)

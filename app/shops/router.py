@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from pydantic import BeforeValidator
 from sqlmodel import Session, select, or_, desc, asc
+from sqlalchemy import cast, String
 from typing import Annotated, Any, List, Optional, Union
 from datetime import datetime
 from enum import Enum
@@ -69,14 +70,18 @@ async def create_shop(
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
         
-        # Create shop
-        shop_dict = shop_data.model_dump()
+        # Create shop - handle JSON fields separately
+        shop_dict = shop_data.model_dump(exclude={'seller_phones', 'social_networks'})
         
         # Calculate expiration date
         expires_at = datetime.utcnow() + relativedelta(months=shop_dict['expiration_months'])
         shop_dict['expires_at'] = expires_at
         
         shop = Shop(**shop_dict)
+        # Set JSON fields using properties
+        shop.seller_phones = shop_data.seller_phones
+        shop.social_networks = shop_data.social_networks
+        
         session.add(shop)
         session.commit()
         session.refresh(shop)
@@ -94,7 +99,7 @@ async def create_shop(
             session.commit()
             session.refresh(shop)
         
-        return shop
+        return ShopRead.from_shop(shop)
     finally:
         session.close()
 
@@ -139,7 +144,8 @@ async def list_shops(
                 or_(
                     Shop.name.ilike(search_term),
                     Shop.description.ilike(search_term),
-                    Shop.location_str.ilike(search_term)
+                    cast(Shop.sector, String).ilike(search_term),
+                    cast(Shop.number, String).ilike(search_term)
                 )
             )
         
@@ -162,7 +168,7 @@ async def list_shops(
         # Apply pagination
         query = query.offset(skip).limit(limit)
         shops = session.exec(query).all()
-        return shops
+        return [ShopRead.from_shop(shop) for shop in shops]
     finally:
         session.close()
 
@@ -179,7 +185,7 @@ async def get_shop(
         shop = session.exec(select(Shop).where(Shop.id == shop_id)).first()
         if not shop:
             raise HTTPException(status_code=404, detail="Shop not found")
-        return shop
+        return ShopRead.from_shop(shop)
     finally:
         session.close()
 
@@ -197,8 +203,9 @@ async def update_shop(
         if not shop:
             raise HTTPException(status_code=404, detail="Shop not found")
         
-        # Update basic fields
-        update_data = shop_data.model_dump(exclude_unset=True)
+        # Update basic fields - handle JSON fields separately
+        all_update_data = shop_data.model_dump(exclude_unset=True)
+        update_data = {k: v for k, v in all_update_data.items() if k not in {'seller_phones', 'social_networks'}}
         
         # Validate category if being updated
         if "category_id" in update_data:
@@ -215,6 +222,12 @@ async def update_shop(
         for key, value in update_data.items():
             if key != "expiration_months":  # Already handled above
                 setattr(shop, key, value)
+        
+        # Update JSON fields using properties
+        if "seller_phones" in all_update_data:
+            shop.seller_phones = all_update_data["seller_phones"]
+        if "social_networks" in all_update_data:
+            shop.social_networks = all_update_data["social_networks"]
         
         # Handle images
         if images:
@@ -250,7 +263,7 @@ async def update_shop(
         session.add(shop)
         session.commit()
         session.refresh(shop)
-        return shop
+        return ShopRead.from_shop(shop)
     finally:
         session.close()
 
@@ -296,7 +309,7 @@ async def toggle_shop_featured(
         session.add(shop)
         session.commit()
         session.refresh(shop)
-        return shop
+        return ShopRead.from_shop(shop)
     finally:
         session.close()
 
@@ -326,7 +339,7 @@ async def activate_shop(
         session.add(shop)
         session.commit()
         session.refresh(shop)
-        return shop
+        return ShopRead.from_shop(shop)
     finally:
         session.close()
 
@@ -351,6 +364,6 @@ async def deactivate_shop(
         session.add(shop)
         session.commit()
         session.refresh(shop)
-        return shop
+        return ShopRead.from_shop(shop)
     finally:
         session.close()

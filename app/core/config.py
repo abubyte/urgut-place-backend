@@ -3,7 +3,7 @@ from typing import Optional
 import secrets
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "UrgutPlease"
+    PROJECT_NAME: str = "UrgutPlace"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     DEFAULT_ADMIN_LASTNAME: str
     
     # Default Admin
-    DEFAULT_ADMIN_EMAIL: str = "admin@urgutplease.uz"
+    DEFAULT_ADMIN_EMAIL: str = "admin@urgutplace.uz"
     DEFAULT_ADMIN_PASSWORD: str = "Admin123!"
     DEFAULT_ADMIN_FIRSTNAME: str = "Admin"
     DEFAULT_ADMIN_LASTNAME: str = "User"

@@ -108,7 +108,7 @@ async def send_verification_code(
         EskizClient().send_sms(phone=login.removeprefix("+"), message='Bu Eskiz dan test')
     elif re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", login):
         subject = "Tasdiqlash kodi"
-        body = f"UrgutPlease uchun tasdiqlash kodi: {verification_code}"
+        body = f"UrgutPlace uchun tasdiqlash kodi: {verification_code}"
         EmailClient().send_email(login, subject, body)
         
     return {"message": "Verification code sent successfully. Please check your phone or email."}
